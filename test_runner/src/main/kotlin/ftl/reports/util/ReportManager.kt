@@ -46,8 +46,65 @@ object ReportManager {
         return webLink
     }
 
-    private fun processXml(matrices: MatrixMap, process: (file: File) -> JUnitTestResult): JUnitTestResult? {
+    private fun processXml(
+        matrices: MatrixMap,
+        process: (file: File) -> JUnitTestResult,
+        mergeFlakyTestReruns: Boolean
+    ): JUnitTestResult? {
         var mergedXml: JUnitTestResult? = null
+
+        // TODO mergeFlakyTestReruns (choose to keep this separate from the pass below because this functionality
+        // is temporary while FTL ships this feature natively.
+        if (mergeFlakyTestReruns) {
+            val rootFolder = File(resolveLocalRunPath(matrices))
+            println("Merging flaky test results in $rootFolder")
+
+            // group duplicate xml files together
+            val rerunGroups = HashMap<String, MutableList<File>>()
+            rootFolder.walk().forEach {
+                if (it.canonicalPath.endsWith(".xml")) {
+                    val regex = if (it.canonicalPath.contains("rerun"))
+                        "\\/(shard.*)-rerun".toRegex()
+                    else
+                        "\\/(shard.*)\\/".toRegex()
+
+                    val matcher = regex.find(it.canonicalPath)
+                    if (matcher != null) {
+                        val k = matcher.groupValues[1]
+                        if (k in rerunGroups) {
+                            rerunGroups[k]?.add(it)
+                        } else {
+                            rerunGroups[k] = mutableListOf(it)
+                        }
+                    }
+                }
+            }
+            println(rerunGroups)
+
+            // first merge the results for each test case to a map of test_case to list of results
+            // then, we can use some kotlin collections stuff to determine whether each test passed at least once
+            // and whether the test was flaky or not
+            rerunGroups.forEach {
+                val testsToResults = HashMap<String, MutableList<Boolean>>()
+                it.value.forEach { xmlFile ->
+                    process(xmlFile).testsuites?.forEach { testSuite ->
+                        testSuite.testcases?.forEach { testCase ->
+                            if (testCase.name!! in testsToResults) {
+                                testsToResults[testCase.name]!!.add(testCase.successful())
+                            } else {
+                                // set the initial result
+                                testsToResults[testCase.name] = mutableListOf(testCase.successful())
+                            }
+                        }
+                    }
+                }
+
+
+                val mergedResults = testsToResults.mapValues { it.value.any{testPassed -> testPassed} }
+                println(mergedResults)
+                println("flaky? " + testsToResults.mapValues {it.value.distinct().size > 1})
+            }
+        }
 
         findXmlFiles(matrices).forEach { xmlFile ->
             val parsedXml = process(xmlFile)
@@ -68,9 +125,9 @@ object ReportManager {
     private fun parseTestSuite(matrices: MatrixMap, args: IArgs): JUnitTestResult? {
         val iosXml = args is IosArgs
         return if (iosXml) {
-            processXml(matrices, ::parseAllSuitesXml)
+            processXml(matrices, ::parseAllSuitesXml, args.flakyTestAttempts > 0)
         } else {
-            processXml(matrices, ::parseOneSuiteXml)
+            processXml(matrices, ::parseOneSuiteXml, args.flakyTestAttempts > 0)
         }
     }
 

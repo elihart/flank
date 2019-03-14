@@ -41,15 +41,24 @@ class ExampleInstrumentedTest {
         assertEquals(true, true)
     }
 
-//    @Test
-//    fun testFails() {
-//        assertEquals(true, false)
-//    }
-//
-//    @Test
-//    fun testIsFlaky() {
-//        if (SystemClock.uptimeMillis() % 2 == 0L) {
-//            fail()
-//        }
-//    }
+    @Test
+    fun testIsFlaky() {
+        if (SystemClock.uptimeMillis() % 2 == 0L) {
+            fail()
+        }
+    }
+
+    @Test
+    fun testIsFlaky1() {
+        if (SystemClock.uptimeMillis() % 2 == 0L) {
+            fail()
+        }
+    }
+
+    @Test
+    fun testIsFlaky2() {
+        if (SystemClock.uptimeMillis() % 2 == 0L) {
+            fail()
+        }
+    }
 }

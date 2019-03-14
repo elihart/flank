@@ -1,0 +1,4 @@
+CostReport
+  Virtual devices
+    $0.27 for 16m
+
